@@ -8,7 +8,7 @@
 %(needs to be normalized). Convert both to doubles and pass to ICA
 close all,
 clear all,
-%% Create File Names
+%% Create File Name Cell Array
 num_files = 6;
 nameOffset = 0;
 mouse_name = 'LD085';
@@ -46,7 +46,7 @@ Affine_Transform_Frames(target_file,corrected_file)
 
 %% Calculate acquisition-wise covariance matrix
 nPCs = 1e3;
-nSegs = 10;
+nSegs = num_files;
 display('---------------------Computing Principle Components-----------------------')
 
 Movie_PCA(corrected_file,nPCs,nSegs)
@@ -54,7 +54,7 @@ Movie_PCA(corrected_file,nPCs,nSegs)
 %% Run ICA algorithm
 CorrFile = matfile(corrected_file,'Writable',true);
 
-PCuse = 1:200;
+PCuse = 1:250;
 mu=.2;
 nIC = 150;
 ica_A_guess = [];
@@ -71,3 +71,8 @@ plotting = 1;
 for i=1:size(ica_segments,1)
     normSeg(:,:,i)=100*ica_segments(i,:,:)/norm(reshape(ica_segments(i,:,:),1,[]));
 end
+
+CorrFile.ica_sig = ica_sig;
+CorrFile.ica_filters = ica_filters;
+CorrFile.ica_segments = ica_segments;
+CorrFile.normSeg = normSeg;

@@ -36,7 +36,7 @@ for seg=1:nSegs
     indM = 1+segs(seg) : segs(seg+1);
     indN = 1:N;
     indZ = 1:Z;
-    tMov = reshape(CorrFile.Movie(indN,indM,indZ),[],Z);
+    tMov = double(reshape(CorrFile.Movie(indN,indM,indZ),[],Z));
     tMov = tMov ./ repmat(mean(tMov,2),1,Z) - 1;
     mixedfilters(indN,indM,1:nPCs) = reshape(tMov*mixedsig',N,[],nPCs);
 end
