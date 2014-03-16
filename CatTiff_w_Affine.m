@@ -7,21 +7,22 @@ close all;
 %get all files names
 num_files = 6;
 nameOffset = 0;
-cated_tiff_filename = 'a28';
-indv_tiff_filename = 'fast';
+mouse_name = 'LD085';
+session_name = '131125';
+view_name = 'view1';
+slice_name = 'slice2';
 tiffpath = cd;
 
 for j=1:num_files
 %     [tifffilename,tiffpath]=uigetfile('*.tif','pick your tiff file');
 %     eval(['fullfilename' num2str(j) ' = [tiffpath tifffilename]']);
-filenames{j} = sprintf('%s%.3d.tif',indv_tiff_filename,j+nameOffset);
+filenames{j} = sprintf('%s_%s_%.3d_%s_%s.tif.tif',mouse_name,session_name,j+nameOffset,view_name,slice_name);
 end
 
 
 
 %open files and concatenate; scale for same instensities
 cated_movie=[];
-cated_corThresh=[];
 cated_xShift = [];
 cated_yShift = [];
 acqRef = [];
@@ -35,7 +36,7 @@ for j=1:num_files
     N=info(1).Height;
     Z=numframes(j);
 
-    chone=zeros(N,M,numframes(j),'single');
+    chone=zeros(N,M,Z,'single');
     for i=1:numframes(j)
         if mod(i,1000)==1
             j
@@ -46,12 +47,12 @@ for j=1:num_files
 
     %scale movie for seamless intensities
     if j==1
-        meanlastframes=median(mean(mean(chone(:,:,1:1e3))));
+        meanlastframes=median(mean(mean(chone(:,:,1:400))));
     end
 
-    meanfirstframes=median(mean(mean(chone(:,:,1:1e3))));
+    meanfirstframes=median(mean(mean(chone(:,:,1:400))));
     chone=chone*(meanlastframes/meanfirstframes);
-    meanlastframes=median(mean(mean(chone(:,:,end-1e3:end))));
+    meanlastframes=median(mean(mean(chone(:,:,end-400:end))));
     
     %Construct Movie Segments
     segPos = [];
@@ -73,14 +74,13 @@ for j=1:num_files
          tTop = prctile(tMov(:),80);
          tMov = (tMov - tBase) / (tTop-tBase);
          tMov(tMov<0) = 0; tMov(tMov>1) = 1;
-    [xshifts(Seg,:),yshifts(Seg,:),corThresh(Seg,:)]=track_subpixel_wholeframe_motion_varythresh(...
+    [xshifts(Seg,:),yshifts(Seg,:)]=track_subpixel_wholeframe_motion_varythresh(...
         tMov,median(tMov,3),5,0.95,75);
     end
     
     choneWins = AcquisitionCorrect(chone,mean(xshifts),mean(yshifts));
        
     cated_movie=cat(3,cated_movie,chone);
-    cated_corThresh=cat(2,cated_corThresh,corThresh);
     cated_xShift = cat(2,cated_xShift, xshifts);
     cated_yShift = cat(2,cated_yShift, yshifts);
     acqRef = cat(3,acqRef,median(choneWins(6:end-5,6:end-5,:),3));
@@ -123,7 +123,7 @@ xmax=find(median(blank,1)==0,1,'last'),
 ymin=find(median(blank,2)==0,1,'first'),
 ymax=find(median(blank,2)==0,1,'last'),
 cated_movie=cated_movie(ymin:ymax,xmin:xmax,:);
-save(cated_tiff_filename,'cated_movie','cated_corThresh','-v7.3')
+save(cated_tiff_filename,'cated_movie','-v7.3')
 
 
 %% Calculate piecewise covariance, principle components, and feed to ICA algorithm
