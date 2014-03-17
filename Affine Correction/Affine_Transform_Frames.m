@@ -23,14 +23,20 @@ acqFrames = MovFile.acqFrames;
 [xshiftsAcq,yshiftsAcq]=track_subpixel_wholeframe_motion_varythresh(...
     acqRef,acqRef(:,:,ceil(size(acqRef,3)/2)),10,0.99,100);
 
-
 for j=1:length(acqFrames)
     j,
     ind = sum(acqFrames(1:j-1)) + (1:acqFrames(j));
     xshift = -(MovFile.cated_xShift(:,ind) + xshiftsAcq(j));
     yshift = -(MovFile.cated_yShift(:,ind) + yshiftsAcq(j));
-    pxNorm = 100/median(median(acqRef(:,:,j)));
-    tMov = pxNorm * MovFile.cated_movie(:,:,ind);
+    tMov = MovFile.cated_movie(:,:,ind);
+    
+    meanfirstframes=median(mean(mean(tMov(:,:,1:200))));
+    if j==1
+        meanlastframes = meanfirstframes;
+    end
+    tMov=tMov*(meanlastframes/meanfirstframes);
+    meanlastframes=median(mean(mean(tMov(:,:,end-200:end))));
+    
     for frame = 1:size(tMov,3)
         if mod(frame,250)==1
             frame,

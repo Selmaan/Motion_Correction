@@ -14,7 +14,7 @@ nameOffset = 0;
 mouse_name = 'LD085';
 session_name = '131125';
 view_name = 'view1';
-slice_name = 'slice2';
+slice_name = 'slice3';
 tiffpath = cd;
 target_file = sprintf('%s_%s_%s_%s',mouse_name,session_name,view_name,slice_name);
 
