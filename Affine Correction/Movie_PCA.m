@@ -1,24 +1,43 @@
-function Movie_PCA(corrected_file,nPCs,nSegs)
+function Movie_PCA(movie_file,nPCs)
 
-CorrFile = matfile(corrected_file,'Writable',true);
-M=CorrFile.M;
-N=CorrFile.N;
-Z=CorrFile.Z;
-acqCov = zeros(Z,Z,'double');
+MovFile = matfile(movie_file,'Writable',true);
+M=MovFile.movie_mask(1,3)+1;
+N=MovFile.movie_mask(1,4)+1;
+acqFrames = MovFile.acqFrames;
+Z = sum(MovFile.acqFrames);
+nAcqs = length(MovFile.acqFrames);
+acqCov = zeros(Z,Z,'single');
+t=Tiff(sprintf('%s_Acq%d.tif',movie_file,1),'r');
+nStrips = t.numberOfStrips;
+nRows = t.getTag('RowsPerStrip');
+blank_frame = MovFile.blank_frame;
 
-segs = ceil(linspace(0,M,nSegs+1));
-
-for seg=1:nSegs
-    seg,
-    indM = 1+segs(seg) : segs(seg+1);
-    indN = 1:N;
-    indZ = 1:Z;
-    tMov = reshape(CorrFile.Movie(indN,indM,indZ),[],Z);
-    tMov = tMov ./ repmat(mean(tMov,2),1,Z) - 1;
-    acqCov = acqCov + cov(double(tMov));
+parfor strip = 1:nStrips
+    display(sprintf('Strip Number: %d',strip)),
+    if strip < nStrips
+        tMov = zeros(nRows,M,Z,'single');
+    else
+        tMov = zeros(mod(N,nRows),M,Z,'single');
+    end
+    
+    for j=1:nAcqs
+        t=Tiff(sprintf('%s_Acq%d.tif',movie_file,j),'r');
+        for frame = 1:acqFrames(j)
+            t.setDirectory(frame);
+            tMov(:,:,frame+sum(acqFrames(1:j-1))) = t.readEncodedStrip(strip);  
+        end
+        t.close();
+    end  
+    % Blank nan pixels and dF/F normalization
+    tMov = reshape(tMov,[],Z);
+    pxMean = mean(tMov,2);
+    tMov = tMov ./ repmat(pxMean,1,Z) - 1;
+    tMov(isnan(pxMean),:) = [];
+    acqCov = acqCov + cov(tMov);          
 end
-acqCov = acqCov/nSegs;
-clear tMov,
+
+acqCov = double(acqCov);
+acqCov=acqCov / nStrips;
 
 display('------------------Computing Eigenvalues------------------')
 [V,D] = eig(acqCov);
@@ -30,24 +49,38 @@ mixedsig = V(:,1:nPCs)';
 clear V D acqCov,
 
 display('------------------Computing Filters------------------')
-
-for seg=1:nSegs
-    seg,
-    indM = 1+segs(seg) : segs(seg+1);
-    indN = 1:N;
-    indZ = 1:Z;
-    tMov = double(reshape(CorrFile.Movie(indN,indM,indZ),[],Z));
-    tMov = tMov ./ repmat(mean(tMov,2),1,Z) - 1;
-    mixedfilters(indN,indM,1:nPCs) = reshape(tMov*mixedsig',N,[],nPCs);
+mixedfilters = zeros(N,M,nPCs);
+for strip = 1:nStrips
+    display(sprintf('Strip Number: %d',strip)),
+    if strip < nStrips
+        tMov = zeros(nRows,M,Z,'single');
+    else
+        tMov = zeros(mod(N,nRows),M,Z,'single');
+    end
+    
+    for j=1:nAcqs
+        t=Tiff(sprintf('%s_Acq%d.tif',movie_file,j),'r');
+        for frame = 1:acqFrames(j)
+            t.setDirectory(frame);
+            tMov(:,:,frame+sum(acqFrames(1:j-1))) = t.readEncodedStrip(strip);  
+        end
+        t.close();
+    end
+    indN = (strip-1)*nRows+1 : (strip-1)*nRows+size(tMov,1);
+    tMov = reshape(tMov,[],Z);
+    pxMean = mean(tMov,2);
+    tMov = tMov ./ repmat(pxMean,1,Z) - 1;
+    mixedfilters(indN,:,:) = reshape(tMov*mixedsig',length(indN),M,nPCs);
 end
-
+    
+    
 mixedfilters=reshape(mixedfilters,N*M,nPCs);
-filterMean = mean(mixedfilters,1);
-filterStd = std(mixedfilters,[],1);
+filterMean = nanmean(mixedfilters,1);
+filterStd = nanstd(mixedfilters,[],1);
 mixedfilters = (mixedfilters-repmat(filterMean,N*M,1))./repmat(filterStd,N*M,1);
 mixedfilters = reshape(mixedfilters,N,M,nPCs);
 
-CorrFile.mixedsig = mixedsig;
-CorrFile.mixedfilters = mixedfilters;
-CorrFile.CovEvals = CovEvals;
-CorrFile.covtrace = covtrace;
+MovFile.mixedfilters = mixedfilters;
+MovFile.mixedsig = mixedsig;
+MovFile.CovEvals = CovEvals;
+MovFile.covtrace = covtrace;

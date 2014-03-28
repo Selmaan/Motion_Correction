@@ -1,70 +1,81 @@
-function TrackSegments(fullfilename,target_file)
+function TrackSegments(fullfilename,movie_file,maxShift,nSegments)
 
-MovFile = matfile(target_file,'Writable',true);
-
-info=imfinfo(fullfilename);
-numframes=length(info);
-M=info(1).Width;
-N=info(1).Height;
-Z=numframes;
-
-%Load Movie
-chone=zeros(N,M,Z,'single');
-for frame=1:numframes
-    if mod(frame,1000)==1
-        frame,
+MovFile = matfile([movie_file '.mat'],'Writable',true);
+%% Load tiff File
+t=Tiff(fullfilename);
+N = t.getTag('ImageLength');
+M = t.getTag('ImageWidth');
+t.setDirectory(1);
+while ~t.lastDirectory
+    t.nextDirectory;
+end
+Z = t.currentDirectory;
+mov = zeros(N,M,Z,'single');
+for frame = 1:Z
+    t.setDirectory(frame);
+    mov(:,:,frame) = t.read;  
+    if ~mod(frame, 100)
+        fprintf('%1.0f frames loaded.\n', frame);
     end
-    chone(:,:,frame)=imread(fullfilename,'tiff',frame,'Info',info);
 end
 
-%Clip bad image region 
-if isempty(MovFile.chone_mask)
-    refWin=mean(chone,3);
+%% Clip bad image region 
+if isempty(MovFile.movie_mask)
+    refWin=mean(mov,3);
     imshow(histeq(refWin/max(refWin(:)))),
     h=imrect;
     pause;
-    chone_mask = round(getPosition(h));
-    MovFile.chone_mask = chone_mask;
+    movie_mask = round(getPosition(h));
+    MovFile.movie_mask = movie_mask;
 else
-    chone_mask = MovFile.chone_mask;
+    movie_mask = MovFile.movie_mask;
 end
-chone = chone(chone_mask(2):chone_mask(2)+chone_mask(4),chone_mask(1):chone_mask(1)+chone_mask(3),:);
-M=chone_mask(3)+1;
-N=chone_mask(4)+1;
+mov = mov(movie_mask(2):movie_mask(2)+movie_mask(4),movie_mask(1):movie_mask(1)+movie_mask(3),:);
+M=movie_mask(3)+1;
+N=movie_mask(4)+1;
 
-%Construct Movie Segments
+%% Construct Movie Segments
 segPos = [];
-xind = floor(linspace(1,M/2,3));
-yind = floor(linspace(1,N/2,3));
+switch nSegments
+    case 9
+        xind = floor(linspace(1,M/2,3));
+        yind = floor(linspace(1,N/2,3));
+    case 6
+        xind = floor(linspace(1,M/2,2));
+        yind = floor(linspace(1,N/2,3));
+    case 4
+        xind = floor(linspace(1,M/2,2));
+        yind = floor(linspace(1,N/2,2));  
+end
+        
 for x=1:length(xind)
     for y=1:length(yind)
         segPos(end+1,:) = [xind(x) yind(y)  floor(M/2) floor(N/2)];
     end
 end
 nSeg = size(segPos,1);
+MovFile.segPos = segPos;
 
-%First order motion correction
-clear xshifts yshifts corThresh,
-for Seg = 1:nSeg
-    Seg,
-    tMov = chone(segPos(Seg,2):segPos(Seg,2)+segPos(Seg,4),segPos(Seg,1):segPos(Seg,1)+segPos(Seg,3),:);
+%% First order motion correction
+parfor Seg = 1:nSeg
+    display(sprintf('Segment: %d',Seg)),
+    tMov = mov(segPos(Seg,2):segPos(Seg,2)+segPos(Seg,4),segPos(Seg,1):segPos(Seg,1)+segPos(Seg,3),:);
      tBase = prctile(tMov(:),1);
      tTop = prctile(tMov(:),99);
      tMov = (tMov - tBase) / (tTop-tBase);
      tMov(tMov<0) = 0; tMov(tMov>1) = 1;
 [xshifts(Seg,:),yshifts(Seg,:)]=track_subpixel_wholeframe_motion_varythresh(...
-    tMov,median(tMov,3),5,0.9,100);
+    tMov,median(tMov,3),maxShift,0.9,100);
 end
 
 %Calculate correction for reference image
-choneWins = AcquisitionCorrect(chone,mean(xshifts),mean(yshifts));
+refFrame = median(AcquisitionCorrect(mov,mean(xshifts),mean(yshifts)),3);
 
 %Save results to disk
 acqFrames = MovFile.acqFrames;
 startFrame = sum(acqFrames)+1;
-endFrame = startFrame+numframes-1;
-MovFile.acqFrames = cat(1,acqFrames,numframes);
+endFrame = startFrame+Z-1;
+MovFile.acqFrames = cat(1,acqFrames,Z);
 MovFile.cated_xShift(1:nSeg,startFrame:endFrame) = xshifts;
 MovFile.cated_yShift(1:nSeg,startFrame:endFrame) = yshifts;
-MovFile.cated_movie(1:N,1:M,startFrame:endFrame)=chone;
-MovFile.acqRef(1:N-10,1:M-10,length(MovFile.acqFrames)+1) = median(choneWins(6:end-5,6:end-5,:),3);
+MovFile.acqRef(1:N-10,1:M-10,length(MovFile.acqFrames)+1) = refFrame(1+maxShift:end-maxShift,1+maxShift:end-maxShift,:);

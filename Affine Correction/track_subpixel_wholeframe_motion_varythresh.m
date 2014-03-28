@@ -15,7 +15,7 @@ function [xshifts,yshifts,correlation_thresholds]=track_subpixel_wholeframe_moti
 %discritization effects minimal.
 
 %use a nifty waitbar to track progress
-h=waitbar(0,'Initializing variables');
+%h=waitbar(0,'Initializing variables');
 
 %the total number of shifts in x or y that will be considered
 numshifts=2*maxshift+1;
@@ -47,7 +47,7 @@ temp_refframe=repmat(temp_refframe,[1 1 z]);
 refframestd=std(temp_refframe,0,1);
 
 %update waitbar
-waitbar(0,h,'Computing shifts');
+%waitbar(0,h,'Computing shifts');
 
 
 %initialize j to zero, for use in simplifing the waitbar calculation
@@ -61,7 +61,7 @@ for xshift=-maxshift:maxshift;
         j=j+1;
 
         %update the waitbar to reflect progress
-        waitbar(j/(numshifts*numshifts),h,['Comparing shift:' num2str(xshift) ' ' num2str(yshift)]);
+       % waitbar(j/(numshifts*numshifts),h,['Comparing shift:' num2str(xshift) ' ' num2str(yshift)]);
         
         %cut out the portion of the frame for this xshift, yshift pair...
         %note this is the same for each frame so we can co this for all
@@ -108,9 +108,9 @@ interpshifts=-maxshift:1/interplevel:maxshift;
 for i=1:z
 
     %update the waitbar 
-    if mod(i,10)==0
-        waitbar(i/z,h,['Tracking Centroid of 2d-Xcorr: Frame ' num2str(i)]);
-    end
+    %if mod(i,10)==0
+    %    waitbar(i/z,h,['Tracking Centroid of 2d-Xcorr: Frame ' num2str(i)]);
+    %end
 
     %pick out the current frames centroid
     thiscorr=squeeze(corrmat(:,:,i));
@@ -188,4 +188,4 @@ ylabel('Correlation Threshold');
 
 
 %close the waitbar
-close(h);
+%close(h);
